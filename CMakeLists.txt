@@ -1,4 +1,10 @@
 cmake_minimum_required(VERSION 3.22)
+
+# 强制设置最低兼容系统为 macOS 11.0 (完美兼容所有 M1 芯片电脑与系统)
+if(APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum OS X version")
+endif()
+
 project(SeesawTiltEQ VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -8,7 +14,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(JUCE CONFIG QUIET)
 
 if(NOT JUCE_FOUND)
-    message(STATUS "JUCE not found locally, downloading official JUCE 8 via CMake FetchContent...")
     include(FetchContent)
     FetchContent_Declare(
         JUCE
@@ -19,7 +24,7 @@ if(NOT JUCE_FOUND)
     FetchContent_MakeAvailable(JUCE)
 endif()
 
-# Disable automatic copying to system folders when running on CI to prevent missing-directory errors
+# Disable automatic copying to system folders when running on CI
 if(DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
     set(JUCE_COPY_PLUGIN FALSE)
 else()
