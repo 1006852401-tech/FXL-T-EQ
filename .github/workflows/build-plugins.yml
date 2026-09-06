@@ -1,0 +1,82 @@
+name: Build AU & VST3 Plugins
+
+on:
+  push:
+    branches: [ '**' ]
+  pull_request:
+    branches: [ '**' ]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    name: Build macOS (AU & VST3)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Locate and Configure CMake
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components ~/Library/Audio/Plug-Ins/VST3
+          find . -maxdepth 2 -name "*.zip" -exec unzip -o {} \; 2>/dev/null || true
+          CMAKE_FILE=$(find . -name "CMakeLists.txt" -not -path "*/build/*" | head -n 1)
+          if [ -z "$CMAKE_FILE" ]; then
+            echo "ERROR: Could not find CMakeLists.txt"
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$CMAKE_FILE")
+          cmake -S "$PROJECT_DIR" -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build AU & VST3 Plugins
+        run: cmake --build build --config Release -j 4
+
+      - name: Package macOS Plugins
+        run: |
+          mkdir -p release_macos
+          find build -name "*.component" -maxdepth 5 -exec cp -R {} release_macos/ \; 2>/dev/null || true
+          find build -name "*.vst3" -maxdepth 5 -exec cp -R {} release_macos/ \; 2>/dev/null || true
+          cd release_macos
+          zip -r ../SeesawTiltEQ_macOS_AU_VST3.zip .
+          cd ..
+
+      - name: Upload macOS Artifacts (AU & VST3)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SeesawTiltEQ_macOS_AU_VST3
+          path: SeesawTiltEQ_macOS_AU_VST3.zip
+
+  build-windows:
+    name: Build Windows (VST3)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Locate and Configure CMake
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -Filter "*.zip" -Recurse | Select-Object -First 1
+          if ($zip) { Expand-Archive -Path $zip.FullName -DestinationPath . -Force }
+          $cmake = Get-ChildItem -Filter "CMakeLists.txt" -Recurse | Where-Object { $_.FullName -notmatch "build" } | Select-Object -First 1
+          if (-not $cmake) {
+            Write-Error "Could not find CMakeLists.txt"
+            exit 1
+          }
+          $projectDir = $cmake.DirectoryName
+          cmake -S "$projectDir" -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3 Plugin
+        run: cmake --build build --config Release -j 4
+
+      - name: Package Windows Plugins
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release_windows
+          Get-ChildItem -Path build -Recurse -Filter "*.vst3" | Copy-Item -Destination release_windows -Recurse
+          Compress-Archive -Path release_windows/* -DestinationPath SeesawTiltEQ_Windows_VST3.zip
+
+      - name: Upload Windows Artifacts (VST3)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SeesawTiltEQ_Windows_VST3
+          path: SeesawTiltEQ_Windows_VST3.zip
